@@ -3,12 +3,61 @@ var path = require('path');
 var favicon = require('serve-favicon');
 var logger = require('morgan');
 var cookieParser = require('cookie-parser');
+var cookieSession = require('cookie-session');
 var bodyParser = require('body-parser');
+var LinkedInStrategy = require('passport-linkedin-oauth2').Strategy;
+var passport = require('passport')
+require('dotenv').load()
+
+
+
+
+// below app.use(passport.session());...
+passport.use(new LinkedInStrategy({
+    clientID: process.env.LINKEDIN_CLIENT_ID,
+    clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/linkedin/callback",
+    scope: ['r_emailaddress', 'r_basicprofile']
+  },
+  function(accessToken, refreshToken, profile, done) {
+    done(null, {id: profile.id, displayName: profile.displayName, token: accessToken})
+  }
+));
+
 
 var routes = require('./routes/index');
 var users = require('./routes/users');
 
 var app = express();
+
+//add to middleware area, after bodyparser, before routes
+app.use(cookieSession({
+  name: 'session',
+  keys: [process.env['SECRET_KEY']]
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(user, done) {
+  done(null, user)
+});
+
+app.get('/auth/linkedin',
+passport.authenticate('linkedin', { state: 'SOME STATE'  }),
+function(req, res){
+  // The request will be redirected to LinkedIn for authentication, so this
+  // function will not be called.
+});
+
+app.get('/auth/linkedin/callback', passport.authenticate('linkedin', {
+  successRedirect: '/',
+  failureRedirect: '/login'
+}));
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -21,6 +70,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(passport.initialize());
 
 app.use('/', routes);
 app.use('/users', users);
